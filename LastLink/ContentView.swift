@@ -9,13 +9,13 @@ import SwiftUI
 
 // Define the possible tab options as an enum
 enum AppTab {
-    case login, messages, status
+    case login, messages, connect, status
 }
 
 struct ContentView: View {
 
     // @State lives inside the struct; the $ prefix when used passes a "binding" (two-way connection)
-    @State private var selection: AppTab = .messages
+    @State private var selection: AppTab = .connect
     @State private var userName: String = ""
     @State private var showWelcome: Bool = true
     
@@ -26,6 +26,10 @@ struct ContentView: View {
                 MessagesView(userName: userName)
                     .tabItem { Label("Messages", systemImage: "message") }
                     .tag(AppTab.messages)   // .tag() is how TabView knows which tab is which
+                
+                ConnectView()
+                    .tabItem { Label("Connect", systemImage: "wifi") }
+                    .tag(AppTab.connect)   // .tag() is how TabView knows which tab is which
                 
                 StatusView()
                     .tabItem { Label("Status", systemImage: "antenna.radiowaves.left.and.right") }
