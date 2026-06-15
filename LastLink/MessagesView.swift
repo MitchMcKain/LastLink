@@ -18,6 +18,7 @@ struct MessagesView: View {
     let userName: String
     
     let contacts: [Contact] = [
+        Contact(name: "General Broadcast"),
         Contact(name: "Cole"),
         Contact(name: "Ben")
     ]
