@@ -10,9 +10,22 @@
 		2697D9752FD745B100105CD4 /* LastLink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastLink.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		26EFA5AF2FE1F7D000336FDE /* Exceptions for "LastLink" folder in "LastLink" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 2697D9742FD745B100105CD4 /* LastLink */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2697D9772FD745B100105CD4 /* LastLink */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				26EFA5AF2FE1F7D000336FDE /* Exceptions for "LastLink" folder in "LastLink" target */,
+			);
 			path = LastLink;
 			sourceTree = "<group>";
 		};
@@ -254,7 +267,11 @@
 				DEVELOPMENT_TEAM = GT22P2F3MJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "\"This app required Bluetooth to connect to the nodes, please allow permission.\"";
+				INFOPLIST_FILE = LastLink/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app required Bluetooth to connect to the nodes, please allow permission.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Requires Bluetooth for connecting to nodes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -287,7 +304,11 @@
 				DEVELOPMENT_TEAM = GT22P2F3MJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "\"This app required Bluetooth to connect to the nodes, please allow permission.\"";
+				INFOPLIST_FILE = LastLink/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "This app required Bluetooth to connect to the nodes, please allow permission.";
+				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "Requires Bluetooth for connecting to nodes.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

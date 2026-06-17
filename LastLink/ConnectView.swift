@@ -4,33 +4,57 @@
 //
 //  Created by McKain, Mitch T on 6/10/26.
 //
-
 import SwiftUI
+import CoreBluetooth
 
 struct ConnectView: View {
     
-    // @StateObject owns the BluetoothManager instance for this view
-    @StateObject private var bluetooth = BluetoothManager()
+    @ObservedObject var bluetooth: BluetoothManager  // @ObservedObject because ContentView owns it
     
     var body: some View {
         VStack {
-            
-            // Show different text depending on authorization state
             if bluetooth.isAuthorized {
                 Text("Bluetooth is ready")
                     .foregroundColor(.green)
                     .padding()
             } else {
-                Text("You are not connected to a node, please connect to a node.")
+                Text("Bluetooth is not available.")
                     .padding()
             }
             
-            Button("Connect") {
-                print("Connecting via Bluetooth...")
+            if !bluetooth.isConnected {
+                Button(bluetooth.isScanning ? "Scanning..." : "Scan for Devices") {
+                    if bluetooth.isScanning {
+                        bluetooth.stopScanning()
+                    } else {
+                        bluetooth.startScanning()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(bluetooth.isScanning ? .gray : .green)
+                .disabled(!bluetooth.isAuthorized)
+                
+                List(bluetooth.discoveredDevices, id: \.identifier) { device in
+                    let name = bluetooth.deviceNames[device.identifier] ?? "Unknown Device"
+                    Button(name) {
+                        bluetooth.stopScanning()
+                        bluetooth.connect(to: device)
+                    }
+                }
+            } else {
+                Text("Connected!")
+                    .foregroundColor(.green)
+                    .padding()
+                
+                Button("Disconnect") {
+                    bluetooth.disconnect()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .padding()
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.yellow)
-            .disabled(!bluetooth.isAuthorized)  // greyed out until bluetooth is authorized
         }
+        .toolbarBackground(Color.yellow, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }

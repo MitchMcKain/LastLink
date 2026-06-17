@@ -13,6 +13,10 @@ struct WelcomeView: View {
     @Binding var isPresented: Bool       // controls whether the sheet is showing
     
     @State private var nameInput: String = ""   // temporary holder while they type
+    @State private var showNameField: Bool = false
+    
+    // Recall the user's name from previous instance
+    let savedName: String? = UserDefaults.standard.string(forKey: "userName")
     
     var body: some View {
         VStack(spacing: 20) {
@@ -23,22 +27,42 @@ struct WelcomeView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            Text("Enter your display name to get started")
-                .foregroundColor(.gray)
-            
-            TextField("Display name", text: $nameInput)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .padding(.horizontal, 40)
-            
-            Button("Continue") {
-                if !nameInput.isEmpty {
-                    userName = nameInput      // write the name back to ContentView
-                    isPresented = false       // dismiss the sheet
+            if let name = savedName, !showNameField {
+                Text("Welcome back, \(name)!")
+                    .foregroundColor(.gray)
+                
+                Button("Continue as, \(name)"){
+                    userName = name
+                    isPresented = false
                 }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.yellow)
+                
+                Button("New User"){
+                    showNameField = true
+                }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.gray)
             }
-            .disabled(nameInput.isEmpty)     // button is greyed out until they type something
-            .buttonStyle(.borderedProminent)
-            .tint(.yellow)
+            else{
+                Text("Enter your display name to get started")
+                    .foregroundColor(.gray)
+                
+                TextField("Display name", text: $nameInput) // Space where user enters their name
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal, 40)
+                
+                Button("Continue") {
+                    if !nameInput.isEmpty {
+                        userName = nameInput
+                        UserDefaults.standard.set(nameInput, forKey: "userName")  // save username to device
+                        isPresented = false
+                    }
+                }
+                .disabled(nameInput.isEmpty) // button is greyed out until they type something
+                .buttonStyle(.borderedProminent)
+                .tint(.yellow)
+            }
             
             Spacer()
         }

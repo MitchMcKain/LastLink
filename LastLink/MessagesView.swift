@@ -5,54 +5,39 @@
 //  Created by McKain, Mitch T on 6/8/26.
 //
 
+// MessagesView.swift
 import SwiftUI
-
-struct Contact: Identifiable {
-    let id = UUID()
-    let name: String
-}
 
 struct MessagesView: View {
     
-    @State private var messageInput = ""
     let userName: String
+    @ObservedObject var bluetooth: BluetoothManager  // received from ContentView
     
     let contacts: [Contact] = [
-        Contact(name: "General Broadcast"),
-        Contact(name: "Cole"),
-        Contact(name: "Ben")
+        Contact(name: "General Broadcast")
     ]
     
     var body: some View {
-//        VStack {
-//            Text("You appear to others as \"\(userName)\"")
-//                .padding()
-//            Text("Type Message Here:")
-//            
-//            TextField("Type here...", text: $messageInput)
-//                .textFieldStyle(.roundedBorder)
-//                .keyboardType(.default)
-//                .textInputAutocapitalization(.never)
-//            
-//            Button("Send") {
-//                print("Message Sent!")
-//            }
-//            .disabled(messageInput.isEmpty)
-//            .tint(.yellow)
-//            .buttonStyle(.borderedProminent)
-//            
-//            Spacer()// pushes everything above it to the top
-//        }
         NavigationStack {
-            Text("You are appearing as \"\(userName)\"")
-                .padding()
-            
             List(contacts) { contact in
-                NavigationLink(destination: ConversationView(contact: contact, userName: userName)){
-                    Text(contact.name)
+                NavigationLink(destination: ConversationView(
+                    contact: contact,
+                    userName: userName,
+                    bluetooth: bluetooth  // pass it along to ConversationView
+                )) {
+                    HStack {
+                        Text(contact.name)
+                        Spacer()
+                        // Show node connection status next to the contact
+                        Circle()
+                            .fill(bluetooth.isConnected ? Color.green : Color.red)
+                            .frame(width: 20, height: 20)
+                    }
                 }
             }
             .navigationTitle("Contacts")
         }
+        .toolbarBackground(Color.yellow, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }

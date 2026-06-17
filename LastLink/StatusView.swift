@@ -24,8 +24,9 @@ struct StatusView: View {
     // @State because these values will change when bluetooth data comes in
     @State private var nodes: [Node] = [
         Node(name: "Alpha", status: .online),
-        Node(name: "Bravo", status: .offline),
-        Node(name: "Charlier", status: .offline)
+        Node(name: "Bravo", status: .online),
+        Node(name: "Charlie", status: .offline),
+        Node(name: "Delta", status: .online)
     ]
     
     var body: some View {
