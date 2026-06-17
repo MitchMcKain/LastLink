@@ -23,7 +23,7 @@ struct ConversationView: View {
     @ObservedObject var bluetooth: BluetoothManager
     
     @State private var messageInput: String = ""
-    @State private var messages: [Message] = []   // stores all sent messages
+    @State private var messages: [Message] = []   // List for all sent messages
     
     var body: some View {
         VStack {
@@ -44,7 +44,7 @@ struct ConversationView: View {
             // Message history
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 8) {
+                    LazyVStack(alignment: .leading, spacing: 8) { // Allows messages to be added smoothly
                         ForEach(messages) { message in
                             HStack {
                                 Spacer()
@@ -60,7 +60,7 @@ struct ConversationView: View {
                                 }
                             }
                             .padding(.horizontal)
-                            .id(message.id)   // needed for ScrollViewReader to find this message
+                            .id(message.id)   // Needed for ScrollViewReader to find this message
                         }
                     }
                     .padding(.top, 8)
@@ -75,7 +75,7 @@ struct ConversationView: View {
                 }
             }
             
-            // Input area
+            // Message input area
             HStack {
                 TextField("Type here...", text: $messageInput)
                     .textFieldStyle(.roundedBorder)
@@ -101,7 +101,7 @@ struct ConversationView: View {
         .toolbarBackground(.visible, for: .navigationBar)
     }
     
-    // Formats the timestamp as a readable time string
+    // Formats the timestamp
     func formatTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short

@@ -9,10 +9,10 @@ import SwiftUI
 
 struct WelcomeView: View {
     
-    @Binding var userName: String        // Binding means this value is owned elsewhere, we just write to it
-    @Binding var isPresented: Bool       // controls whether the sheet is showing
+    @Binding var userName: String
+    @Binding var isPresented: Bool       // Controls whether the sheet is showing
     
-    @State private var nameInput: String = ""   // temporary holder while they type
+    @State private var nameInput: String = ""   // Temporary holder while user types
     @State private var showNameField: Bool = false
     
     // Recall the user's name from previous instance
@@ -55,11 +55,11 @@ struct WelcomeView: View {
                 Button("Continue") {
                     if !nameInput.isEmpty {
                         userName = nameInput
-                        UserDefaults.standard.set(nameInput, forKey: "userName")  // save username to device
+                        UserDefaults.standard.set(nameInput, forKey: "userName")  // Save username to device
                         isPresented = false
                     }
                 }
-                .disabled(nameInput.isEmpty) // button is greyed out until they type something
+                .disabled(nameInput.isEmpty) // Button is greyed out until they type something
                 .buttonStyle(.borderedProminent)
                 .tint(.yellow)
             }

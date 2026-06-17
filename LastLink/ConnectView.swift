@@ -13,7 +13,7 @@ struct ConnectView: View {
     
     var body: some View {
         VStack {
-            if bluetooth.isAuthorized {
+            if bluetooth.isAuthorized { // If user has given permission to use Bluetooth
                 Text("Bluetooth is ready")
                     .foregroundColor(.green)
                     .padding()
@@ -22,6 +22,7 @@ struct ConnectView: View {
                     .padding()
             }
             
+            // Start or Stop scanning depending on current process
             if !bluetooth.isConnected {
                 Button(bluetooth.isScanning ? "Scanning..." : "Scan for Devices") {
                     if bluetooth.isScanning {
@@ -34,6 +35,7 @@ struct ConnectView: View {
                 .tint(bluetooth.isScanning ? .gray : .green)
                 .disabled(!bluetooth.isAuthorized)
                 
+                // List the devices that were found nearby
                 List(bluetooth.discoveredDevices, id: \.identifier) { device in
                     let name = bluetooth.deviceNames[device.identifier] ?? "Unknown Device"
                     Button(name) {
@@ -41,7 +43,9 @@ struct ConnectView: View {
                         bluetooth.connect(to: device)
                     }
                 }
-            } else {
+            }
+            
+            else {
                 Text("Connected!")
                     .foregroundColor(.green)
                     .padding()

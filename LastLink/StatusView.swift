@@ -7,7 +7,6 @@
 
 import SwiftUI
 
-// Enum makes it clean to work with later — no typos, easy to switch on
 enum NodeStatus {
     case online, offline
 }
@@ -67,7 +66,7 @@ struct StatusView: View {
             
 //            Spacer()
         }
-        .toolbarBackground(Color.yellow, for: .navigationBar)  // add these
+        .toolbarBackground(Color.yellow, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
     }
 }

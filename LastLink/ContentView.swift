@@ -14,23 +14,26 @@ enum AppTab {
 struct ContentView: View {
 
     // @State lives inside the struct; the $ prefix when used passes a "binding" (two-way connection)
-    @State private var selection: AppTab = .connect
+    @State private var selection: AppTab = .connect // Begin with the Connect tab
     @State private var userName: String = ""
     @State private var showWelcome: Bool = true
-    @StateObject private var bluetooth = BluetoothManager()
+    @StateObject private var bluetooth = BluetoothManager() // Instance of BluetoothManager so that it can be used everywhere else
     
     var body: some View {
         NavigationStack{
             TabView(selection: $selection) {
                 
+                // Messages tab navigation
                 MessagesView(userName: userName, bluetooth: bluetooth)
                     .tabItem { Label("Messages", systemImage: "message") }
                     .tag(AppTab.messages)   // .tag() is how TabView knows which tab is which
                 
+                // Connect tab navigation
                 ConnectView(bluetooth: bluetooth)
                     .tabItem { Label("Connect", systemImage: "wifi") }
                     .tag(AppTab.connect)   // .tag() is how TabView knows which tab is which
                 
+                // Status tab navigation
                 StatusView()
                     .tabItem { Label("Status", systemImage: "antenna.radiowaves.left.and.right") }
                     .tag(AppTab.status)
@@ -43,10 +46,11 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("Last Link")
-            .navigationBarTitleDisplayMode(.inline)  // keeps title centered on one line
-            .toolbarBackground(Color.yellow, for: .navigationBar)  // sets the background color
+            .navigationBarTitleDisplayMode(.inline)  // Center title on one line
+            .toolbarBackground(Color.yellow, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             
+            // Welcome screen as pop-up
             .sheet(isPresented: $showWelcome) {
                 WelcomeView(userName: $userName, isPresented: $showWelcome)
                     .interactiveDismissDisabled(true)

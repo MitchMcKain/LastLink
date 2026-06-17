@@ -13,7 +13,7 @@ struct MessagesView: View {
     let userName: String
     @ObservedObject var bluetooth: BluetoothManager  // received from ContentView
     
-    let contacts: [Contact] = [
+    let contacts: [Contact] = [ // List of contacts available
         Contact(name: "General Broadcast")
     ]
     
