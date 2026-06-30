@@ -26,15 +26,18 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var deviceNames: [UUID: String] = [:]
     @Published var messages: [Message] = []
+    @Published var emergencyMessage: String? = "Evacuate ASAP"
     @Published var nodeRoutingTable: [String: String] = [
         "C": "Cole"
         // add more as you learn which node maps to which person
     ]
+//    @Published var contacts: [Contact] = []
+//    @Published var conversations: [String: [Message]] = [:]  // keyed by nodeID
 
-    private func resolveSender(for nodeID: String?) -> String {
-        guard let nodeID = nodeID else { return "Unknown Node" }
-        return nodeRoutingTable[nodeID] ?? "Node \(nodeID)"
-    }
+//    private func resolveSender(for nodeID: String?) -> String {
+//        guard let nodeID = nodeID else { return "Unknown Node" }
+//        return nodeRoutingTable[nodeID] ?? "Node \(nodeID)"
+//    }
     
     override init() {
         super.init()
@@ -194,9 +197,18 @@ extension BluetoothManager: CBPeripheralDelegate {
             print("Failed to decode incoming data")
             return
         }
-        let incoming = Message(text: text, sender: "Node", timestamp: Date())
+
+        if text.hasPrefix("EMERGENCY:") {
+            let alertText = text.replacingOccurrences(of: "EMERGENCY:", with: "").trimmingCharacters(in: .whitespaces)
+            emergencyMessage = alertText
+            print("Emergency received: \(alertText)")
+            return   // don't also treat this as a normal chat message
+        }
+
+        let parseResult = parseIncoming(text)
+        let incoming = Message(text: parseResult.text, sender: "Node", timestamp: Date())
         messages.append(incoming)
-        print("Received: \(text)")
+        print("Received: \(parseResult.text)")
     }
 }
 
