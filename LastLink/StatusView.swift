@@ -16,16 +16,17 @@ struct Node: Identifiable {
     let id = UUID()
     let name: String
     var status: NodeStatus   // var because this will change when bluetooth updates it
+    var user: String
 }
 
 struct StatusView: View {
     
     // @State because these values will change when bluetooth data comes in
     @State private var nodes: [Node] = [
-        Node(name: "Alpha", status: .online),
-        Node(name: "Bravo", status: .online),
-        Node(name: "Charlie", status: .offline),
-        Node(name: "Delta", status: .online)
+        Node(name: "Alpha", status: .online, user: "Mitch"),
+        Node(name: "Bravo", status: .online, user: "Cole"),
+        Node(name: "Charlie", status: .online, user: "Ben"),
+        Node(name: "Delta", status: .online, user: "Pittsburgh E.M.S.")
     ]
     
     var body: some View {
@@ -40,6 +41,9 @@ struct StatusView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                 Text("Status")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                Text("User")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
             }
@@ -57,6 +61,9 @@ struct StatusView: View {
                     // Status cell changes color based on value
                     Text(node.status == .online ? "Online" : "Offline")
                         .foregroundColor(node.status == .online ? .green : .red)
+                        .frame(maxWidth: .infinity)
+                    
+                    Text(node.user)
                         .frame(maxWidth: .infinity)
                 }
                 .padding()
