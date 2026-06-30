@@ -15,8 +15,9 @@ class BluetoothManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral? // This will be the ESP32
     private var writeCharacteristic: CBCharacteristic?
     
-    let targetServiceUUID = CBUUID(string: "1111") // Fixed service UUID for iPad peripheral
-    let targetCharacteristicUUID = CBUUID(string: "2222") // Fixed characteristic UUID for iPad peripheral
+    let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
+    let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral
+    let targetNotifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // TX from ESP32's perspective
     
     // Variables for connection process
     @Published var isAuthorized: Bool = false
@@ -24,6 +25,16 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var isConnected: Bool = false
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var deviceNames: [UUID: String] = [:]
+    @Published var messages: [Message] = []
+    @Published var nodeRoutingTable: [String: String] = [
+        "C": "Cole"
+        // add more as you learn which node maps to which person
+    ]
+
+    private func resolveSender(for nodeID: String?) -> String {
+        guard let nodeID = nodeID else { return "Unknown Node" }
+        return nodeRoutingTable[nodeID] ?? "Node \(nodeID)"
+    }
     
     override init() {
         super.init()
@@ -64,15 +75,18 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Send Message function, same message as ConversationView message
-    func sendMessage(_ message: String) {
+    func sendMessage(_ message: String, sender: String) {
         guard let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
               let data = message.data(using: .utf8) else {
             print("Not ready to send")
             return
         }
-        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse // Work for either permision
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
         peripheral.writeValue(data, for: characteristic, type: writeType)
+
+        let outgoing = Message(text: message, sender: sender, timestamp: Date())
+        messages.append(outgoing)
         print("Sent: \(message)")
     }
 }
@@ -151,11 +165,15 @@ extension BluetoothManager: CBPeripheralDelegate {
         guard let characteristics = service.characteristics else { return }
         for characteristic in characteristics {
             print("Discovered characteristic: \(characteristic.uuid)")
-            
-            // Store characteristic for sendMessage
+
             if characteristic.uuid == targetCharacteristicUUID {
                 writeCharacteristic = characteristic
                 print("Write characteristic found, ready to send!")
+            }
+
+            if characteristic.uuid == targetNotifyUUID {
+                peripheral.setNotifyValue(true, for: characteristic)
+                print("Subscribing to notifications on \(characteristic.uuid)")
             }
         }
     }
@@ -168,4 +186,30 @@ extension BluetoothManager: CBPeripheralDelegate {
             print("Write confirmed by peripheral")
         }
     }
+    
+    // Read in message that was sent and is availabl on ESP32
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard error == nil, let data = characteristic.value,
+              let text = String(data: data, encoding: .utf8) else {
+            print("Failed to decode incoming data")
+            return
+        }
+        let incoming = Message(text: text, sender: "Node", timestamp: Date())
+        messages.append(incoming)
+        print("Received: \(text)")
+    }
 }
+
+    // Splits "C: Hello" into ("C", "Hello"). Falls back to (nil, original text) if no prefix found.
+    private func parseIncoming(_ raw: String) -> (nodeID: String?, text: String) {
+        guard let colonIndex = raw.firstIndex(of: ":") else {
+            return (nil, raw)
+        }
+        let prefix = raw[raw.startIndex..<colonIndex].trimmingCharacters(in: .whitespaces)
+        let remainder = raw[raw.index(after: colonIndex)...].trimmingCharacters(in: .whitespaces)
+        // Basic sanity check: only treat as a node prefix if it's short (e.g. single letter/word)
+        guard prefix.count <= 3 else {
+            return (nil, raw)
+        }
+        return (prefix, remainder)
+    }

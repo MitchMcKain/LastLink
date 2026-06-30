@@ -8,14 +8,6 @@
 // ConversationView.swift
 import SwiftUI
 
-// Simple model to represent a sent message
-struct Message: Identifiable {
-    let id = UUID()
-    let text: String
-    let sender: String
-    let timestamp: Date
-}
-
 struct ConversationView: View {
     
     let contact: Contact
@@ -23,7 +15,6 @@ struct ConversationView: View {
     @ObservedObject var bluetooth: BluetoothManager
     
     @State private var messageInput: String = ""
-    @State private var messages: [Message] = []   // List for all sent messages
     
     var body: some View {
         VStack {
@@ -45,29 +36,34 @@ struct ConversationView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) { // Allows messages to be added smoothly
-                        ForEach(messages) { message in
+                        ForEach(bluetooth.messages) { message in
                             HStack {
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
+                                if message.sender == userName {
+                                    Spacer()
+                                }
+                                VStack(alignment: message.sender == userName ? .trailing : .leading, spacing: 2) {
                                     Text(message.text)
                                         .padding(10)
-                                        .background(Color.yellow)
-                                        .foregroundColor(.black)
+                                        .background(message.sender == userName ? Color.yellow : Color.gray.opacity(0.3))
+                                        .foregroundColor(.primary)
                                         .cornerRadius(12)
                                     Text(formatTime(message.timestamp))
                                         .font(.caption2)
                                         .foregroundColor(.gray)
                                 }
+                                if message.sender != userName {
+                                    Spacer()
+                                }
                             }
                             .padding(.horizontal)
-                            .id(message.id)   // Needed for ScrollViewReader to find this message
+                            .id(message.id)
                         }
                     }
                     .padding(.top, 8)
                 }
-                .onChange(of: messages.count) {
+                .onChange(of: bluetooth.messages.count) {
                     // Automatically scroll to the latest message when a new one is added
-                    if let last = messages.last {
+                    if let last = bluetooth.messages.last {
                         withAnimation {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
@@ -81,14 +77,8 @@ struct ConversationView: View {
                     .textFieldStyle(.roundedBorder)
                 
                 Button("Send") {
-                    let newMessage = Message(
-                        text: messageInput,
-                        sender: userName,
-                        timestamp: Date()
-                    )
-                    messages.append(newMessage)         // add to history
-                    bluetooth.sendMessage(messageInput) // send over bluetooth
-                    messageInput = ""                   // clear the field
+                    bluetooth.sendMessage(messageInput, sender: userName)
+                    messageInput = ""
                 }
                 .disabled(messageInput.isEmpty || !bluetooth.isConnected)
                 .buttonStyle(.borderedProminent)
