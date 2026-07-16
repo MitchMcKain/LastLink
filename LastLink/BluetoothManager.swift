@@ -20,18 +20,24 @@ class BluetoothManager: NSObject, ObservableObject {
     let targetNotifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // TX from ESP32's perspective
     
     // Variables for connection process
+    @Published var myUserName: String? = nil
     @Published var isAuthorized: Bool = false
     @Published var isScanning: Bool = false
     @Published var isConnected: Bool = false
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var deviceNames: [UUID: String] = [:]
     @Published var messages: [Message] = []
+    @Published var myNodeID:String? = nil
     @Published var emergencyMessage: String? = "Evacuate ASAP"
     @Published var nodeRoutingTable: [String: String] = [
         "C": "Cole"
         // add more as you learn which node maps to which person
     ]
-//    @Published var contacts: [Contact] = []
+    var contacts: [Contact] {
+        nodeRoutingTable.map { nodeID, name in
+            Contact(name: name, nodeID: nodeID)
+        }
+    }
 //    @Published var conversations: [String: [Message]] = [:]  // keyed by nodeID
 
 //    private func resolveSender(for nodeID: String?) -> String {
@@ -131,9 +137,10 @@ extension BluetoothManager: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("didConnect fired")
         isConnected = true
+        myNodeID = extractNodeID(from: peripheral.name)
         peripheral.delegate = self
         peripheral.discoverServices(nil)
-        print("discoverServices called")
+        print("discoverServices called, myNodeID = \(myNodeID ?? "nil")")
     }
     
     // Handle failing to connect to a peripheral
@@ -149,6 +156,11 @@ extension BluetoothManager: CBCentralManagerDelegate {
         connectedPeripheral = nil
         writeCharacteristic = nil    // clear this on disconnect
         print("Disconnected from \(peripheral.name ?? "unknown")")
+    }
+    
+    private func extractNodeID(from peripheralName: String?) -> String? {
+        guard let name = peripheralName, name.hasPrefix("LastLink-") else { return nil }
+        return String(name.dropFirst("LastLink-".count))
     }
 }
 
@@ -198,11 +210,25 @@ extension BluetoothManager: CBPeripheralDelegate {
             return
         }
 
+        // If message is an Emergency message
         if text.hasPrefix("EMERGENCY:") {
             let alertText = text.replacingOccurrences(of: "EMERGENCY:", with: "").trimmingCharacters(in: .whitespaces)
             emergencyMessage = alertText
             print("Emergency received: \(alertText)")
             return   // don't also treat this as a normal chat message
+        }
+        
+        // If message is a presence announcement...
+        if text.hasPrefix("PRESENCE:") {
+            let parts = text.dropFirst("PRESENCE:".count).split(separator: ":", maxSplits: 1)
+            guard parts.count == 2 else {
+                print("Malformed presence message: \(text)")
+                return
+            }
+            let name = String(parts[0])
+            let nodeID = String(parts[1])
+            handlePresence(nodeID: nodeID, name: name)
+            return   // don't treat this as a chat message
         }
 
         let parseResult = parseIncoming(text)
@@ -210,18 +236,40 @@ extension BluetoothManager: CBPeripheralDelegate {
         messages.append(incoming)
         print("Received: \(parseResult.text)")
     }
+    
+    // Update the routing table
+    func handlePresence(nodeID: String, name: String) {
+        nodeRoutingTable[nodeID] = name
+        print("Presence update: \(name) is at Node \(nodeID)")
+    }
+    
+    // Annoucing to the node that you are connected to it
+    func announcePresence(userName: String) {
+        guard let nodeID = myNodeID,
+              let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic,
+              let data = "PRESENCE:\(userName):\(nodeID)".data(using: .utf8) else {
+            print("Not ready to announce presence")
+            return
+        }
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        print("Announced presence: \(userName) at \(nodeID)")
+    }
 }
 
-    // Splits "C: Hello" into ("C", "Hello"). Falls back to (nil, original text) if no prefix found.
-    private func parseIncoming(_ raw: String) -> (nodeID: String?, text: String) {
-        guard let colonIndex = raw.firstIndex(of: ":") else {
-            return (nil, raw)
-        }
-        let prefix = raw[raw.startIndex..<colonIndex].trimmingCharacters(in: .whitespaces)
-        let remainder = raw[raw.index(after: colonIndex)...].trimmingCharacters(in: .whitespaces)
-        // Basic sanity check: only treat as a node prefix if it's short (e.g. single letter/word)
-        guard prefix.count <= 3 else {
-            return (nil, raw)
-        }
-        return (prefix, remainder)
+// Splits "C: Hello" into ("C", "Hello"). Falls back to (nil, original text) if no prefix found.
+private func parseIncoming(_ raw: String) -> (nodeID: String?, text: String) {
+    guard let colonIndex = raw.firstIndex(of: ":") else {
+        return (nil, raw)
     }
+    let prefix = raw[raw.startIndex..<colonIndex].trimmingCharacters(in: .whitespaces)
+    let remainder = raw[raw.index(after: colonIndex)...].trimmingCharacters(in: .whitespaces)
+    // Basic sanity check: only treat as a node prefix if it's short (e.g. single letter/word)
+    guard prefix.count <= 3 else {
+        return (nil, raw)
+    }
+    return (prefix, remainder)
+}
+
+

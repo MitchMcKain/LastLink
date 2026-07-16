@@ -7,8 +7,9 @@
 import Foundation
 
 // Makes it easier to use in multiple files when declared outside
-struct Contact: Identifiable {
-    let id = UUID()
+struct Contact: Identifiable, Hashable {
     let name: String
-//    let nodeID: String
+    let nodeID: String
+    
+    var id: String{ nodeID }
 }

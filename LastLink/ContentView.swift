@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var userName: String = ""
     @State private var showWelcome: Bool = true
     @StateObject private var bluetooth = BluetoothManager() // Instance of BluetoothManager so that it can be used everywhere else
+
     
     var body: some View {
         NavigationStack{
@@ -45,6 +46,10 @@ struct ContentView: View {
                     userName = savedName
                 }
             }
+            .onChange(of: userName)  { oldValue, newValue in
+                    bluetooth.setUserName(newValue)
+                }
+            
             .navigationTitle("Last Link")
             .navigationBarTitleDisplayMode(.inline)  // Center title on one line
             .toolbarBackground(Color.yellow, for: .navigationBar)
