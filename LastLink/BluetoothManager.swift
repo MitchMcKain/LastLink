@@ -14,6 +14,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private var centralManager: CBCentralManager! // This acts as user's device
     private var connectedPeripheral: CBPeripheral? // This will be the ESP32
     private var writeCharacteristic: CBCharacteristic?
+    private var hasAnnouncedPresence = false
     
     let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
     let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral
@@ -27,23 +28,36 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var discoveredDevices: [CBPeripheral] = []
     @Published var deviceNames: [UUID: String] = [:]
     @Published var messages: [Message] = []
-    @Published var myNodeID:String? = nil
+    @Published var myNodeID: String? = nil
     @Published var emergencyMessage: String? = "Evacuate ASAP"
-    @Published var nodeRoutingTable: [String: String] = [
-        "C": "Cole"
-        // add more as you learn which node maps to which person
-    ]
+    @Published var nodeRoutingTable: [String: String] = [:]
+    
     var contacts: [Contact] {
-        nodeRoutingTable.map { nodeID, name in
-            Contact(name: name, nodeID: nodeID)
-        }
+        nodeRoutingTable
+            .filter { $0.key != myNodeID } // Do not display yourself as a contact
+            .map { nodeID, name in
+                Contact(name: name, nodeID: nodeID)
+            }
     }
-//    @Published var conversations: [String: [Message]] = [:]  // keyed by nodeID
-
-//    private func resolveSender(for nodeID: String?) -> String {
-//        guard let nodeID = nodeID else { return "Unknown Node" }
-//        return nodeRoutingTable[nodeID] ?? "Node \(nodeID)"
-//    }
+    
+    let knownNodeIDs: [String] = ["A", "B", "C", "D"]
+    
+    var nodeStatusList: [NodeStatusInfo] {
+        knownNodeIDs.map { nodeID in
+            if let userName = nodeRoutingTable[nodeID] {
+                return NodeStatusInfo(id: nodeID, userName: userName, isOnline: true)
+            } else {
+                return NodeStatusInfo(id: nodeID, userName: "N/A", isOnline: false)
+            }
+        }
+        .sorted { $0.id < $1.id }
+    }
+    
+    struct NodeStatusInfo: Identifiable {
+        let id: String
+        let userName: String
+        let isOnline: Bool
+    }
     
     override init() {
         super.init()
@@ -125,14 +139,19 @@ extension BluetoothManager: CBCentralManagerDelegate {
             }
         }
         
-        // Store whatever name we have
-        deviceNames[peripheral.identifier] = deviceName ?? "Unknown"
+        // Only care about our own devices — filters out everything that isn't "LastLink-X"
+        guard let name = deviceName, name.hasPrefix("LastLink-") else {
+            return
+        }
+        
+        deviceNames[peripheral.identifier] = name
         
         if !discoveredDevices.contains(peripheral) {
             discoveredDevices.append(peripheral)
-            print("Found: \(deviceName ?? "unnamed") | \(peripheral.identifier)")
+            print("Found: \(name) | \(peripheral.identifier)")
         }
     }
+    
     // Handle connceting to a peripheral
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("didConnect fired")
@@ -155,12 +174,42 @@ extension BluetoothManager: CBCentralManagerDelegate {
         isConnected = false
         connectedPeripheral = nil
         writeCharacteristic = nil    // clear this on disconnect
+        hasAnnouncedPresence = false
         print("Disconnected from \(peripheral.name ?? "unknown")")
     }
     
     private func extractNodeID(from peripheralName: String?) -> String? {
         guard let name = peripheralName, name.hasPrefix("LastLink-") else { return nil }
         return String(name.dropFirst("LastLink-".count))
+    }
+    
+    func setUserName(_ name: String) {
+        myUserName = name
+    }
+    
+    func requestRoutingTable() {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic,
+              let data = "REQUEST:\(myNodeID ?? "?")".data(using: .utf8) else {
+            print("Not ready to request routing table")
+            return
+        }
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        print("Requested routing table")
+    }
+    
+    func sendRoutingTable() {
+        guard let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic else {
+            print("Not ready to send routing table")
+            return
+        }
+        let encoded = nodeRoutingTable.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
+        guard let data = "TABLE:\(encoded)".data(using: .utf8) else { return }
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        print("Sent routing table: \(encoded)")
     }
 }
 
@@ -191,6 +240,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 print("Subscribing to notifications on \(characteristic.uuid)")
             }
         }
+        announceIfReady()
     }
     
     // Confirm message is received by peripheral
@@ -209,6 +259,8 @@ extension BluetoothManager: CBPeripheralDelegate {
             print("Failed to decode incoming data")
             return
         }
+        
+        print("Raw: \(text)")
 
         // If message is an Emergency message
         if text.hasPrefix("EMERGENCY:") {
@@ -218,32 +270,56 @@ extension BluetoothManager: CBPeripheralDelegate {
             return   // don't also treat this as a normal chat message
         }
         
+        let parseResult = parseIncoming(text)
+        let appText = parseResult.text
+        
         // If message is a presence announcement...
-        if text.hasPrefix("PRESENCE:") {
-            let parts = text.dropFirst("PRESENCE:".count).split(separator: ":", maxSplits: 1)
+        if appText.hasPrefix("PRESENCE:") {
+            let parts = appText.dropFirst("PRESENCE:".count).split(separator: ":", maxSplits: 1)
             guard parts.count == 2 else {
-                print("Malformed presence message: \(text)")
+                print("Malformed presence message: \(appText)")
                 return
             }
             let name = String(parts[0])
             let nodeID = String(parts[1])
             handlePresence(nodeID: nodeID, name: name)
-            return   // don't treat this as a chat message
+            return
+        }
+        
+        // If message is a routing table...
+        if appText.hasPrefix("TABLE:") {
+            let encoded = appText.dropFirst("TABLE:".count)
+            let pairs = encoded.split(separator: ",")
+            for pair in pairs {
+                let kv = pair.split(separator: "=", maxSplits: 1)
+                guard kv.count == 2 else { continue }
+                let nodeID = String(kv[0])
+                let name = String(kv[1])
+                handlePresence(nodeID: nodeID, name: name)
+            }
+            return
+        }
+        
+        // If message is a request for the routing table...
+        if appText.hasPrefix("REQUEST:") {
+            print("Received routing table request")
+            sendRoutingTable()
+            return
         }
 
-        let parseResult = parseIncoming(text)
-        let incoming = Message(text: parseResult.text, sender: "Node", timestamp: Date())
+        let incoming = Message(text: appText, sender: "Node", timestamp: Date())
         messages.append(incoming)
-        print("Received: \(parseResult.text)")
+        print("Received: \(appText)")
     }
     
     // Update the routing table
     func handlePresence(nodeID: String, name: String) {
         nodeRoutingTable[nodeID] = name
         print("Presence update: \(name) is at Node \(nodeID)")
+        print("Current routing table: \(nodeRoutingTable)")
     }
     
-    // Annoucing to the node that you are connected to it
+    // Announcing to the node that you are connected to it
     func announcePresence(userName: String) {
         guard let nodeID = myNodeID,
               let peripheral = connectedPeripheral,
@@ -255,6 +331,25 @@ extension BluetoothManager: CBPeripheralDelegate {
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
         peripheral.writeValue(data, for: characteristic, type: writeType)
         print("Announced presence: \(userName) at \(nodeID)")
+        
+        handlePresence(nodeID: nodeID, name: userName)
+        requestRoutingTable()
+    }
+    
+    private func announceIfReady() {
+        guard writeCharacteristic != nil else {
+            print("Write characteristic not ready yet")
+            return
+        }
+        guard let name = myUserName else {
+            print("No userName set yet, skipping presence announcement")
+            return
+        }
+        guard !hasAnnouncedPresence else {
+            return   // already handled this connection, ignore repeat discovery callbacks
+        }
+        hasAnnouncedPresence = true
+        announcePresence(userName: name)
     }
 }
 
@@ -271,5 +366,3 @@ private func parseIncoming(_ raw: String) -> (nodeID: String?, text: String) {
     }
     return (prefix, remainder)
 }
-
-
