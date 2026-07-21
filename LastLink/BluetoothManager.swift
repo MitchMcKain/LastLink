@@ -332,8 +332,8 @@ extension BluetoothManager: CBPeripheralDelegate {
         peripheral.writeValue(data, for: characteristic, type: writeType)
         print("Announced presence: \(userName) at \(nodeID)")
         
-        handlePresence(nodeID: nodeID, name: userName)
         requestRoutingTable()
+        handlePresence(nodeID: nodeID, name: userName)
     }
     
     private func announceIfReady() {

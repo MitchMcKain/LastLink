@@ -13,10 +13,6 @@ struct MessagesView: View {
     let userName: String
     @ObservedObject var bluetooth: BluetoothManager  // received from ContentView
     
-    let contacts: [Contact] = [ // List of contacts available
-        Contact(name: "General Broadcast")
-    ]
-    
     var body: some View {
             NavigationStack {
                 VStack(spacing: 0) {
@@ -27,7 +23,7 @@ struct MessagesView: View {
                         }
                     }
                     
-                    List(contacts) { contact in
+                    List(bluetooth.contacts) { contact in
                         NavigationLink(destination: ConversationView(
                             contact: contact,
                             userName: userName,

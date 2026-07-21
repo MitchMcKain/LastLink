@@ -2,32 +2,14 @@
 //  StatusView.swift
 //  LastLink
 //
-//  Created by McKain, Mitch T on 6/8/26.
+//  Created by McKain, Mitch T on 6/10/26.
 //
 
 import SwiftUI
 
-enum NodeStatus {
-    case online, offline
-}
-
-// Identifiable struct for each row
-struct Node: Identifiable {
-    let id = UUID()
-    let name: String
-    var status: NodeStatus   // var because this will change when bluetooth updates it
-    var user: String
-}
-
 struct StatusView: View {
     
-    // @State because these values will change when bluetooth data comes in
-    @State private var nodes: [Node] = [
-        Node(name: "Alpha", status: .online, user: "Mitch"),
-        Node(name: "Bravo", status: .online, user: "Cole"),
-        Node(name: "Charlie", status: .online, user: "Ben"),
-        Node(name: "Delta", status: .online, user: "Pittsburgh E.M.S.")
-    ]
+    @ObservedObject var bluetooth: BluetoothManager
     
     var body: some View {
         VStack(spacing: 0) {
@@ -52,18 +34,18 @@ struct StatusView: View {
             
             Divider()
             
-            // Data rows
-            ForEach(nodes) { node in
+            // Data rows, driven by BluetoothManager.nodeStatusList
+            ForEach(bluetooth.nodeStatusList) { node in
                 HStack {
-                    Text(node.name)
+                    Text(node.id)
                         .frame(maxWidth: .infinity)
                     
                     // Status cell changes color based on value
-                    Text(node.status == .online ? "Online" : "Offline")
-                        .foregroundColor(node.status == .online ? .green : .red)
+                    Text(node.isOnline ? "Online" : "Offline")
+                        .foregroundColor(node.isOnline ? .green : .red)
                         .frame(maxWidth: .infinity)
                     
-                    Text(node.user)
+                    Text(node.userName)
                         .frame(maxWidth: .infinity)
                 }
                 .padding()

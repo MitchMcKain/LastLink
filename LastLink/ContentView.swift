@@ -35,7 +35,7 @@ struct ContentView: View {
                     .tag(AppTab.connect)   // .tag() is how TabView knows which tab is which
                 
                 // Status tab navigation
-                StatusView()
+                StatusView(bluetooth: bluetooth)
                     .tabItem { Label("Status", systemImage: "antenna.radiowaves.left.and.right") }
                     .tag(AppTab.status)
                 
