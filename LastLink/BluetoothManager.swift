@@ -40,7 +40,7 @@ class BluetoothManager: NSObject, ObservableObject {
             }
     }
     
-    let knownNodeIDs: [String] = ["A", "B", "C", "D"]
+    let knownNodeIDs: [String] = ["A", "B", "C"]
     
     var nodeStatusList: [NodeStatusInfo] {
         knownNodeIDs.map { nodeID in
@@ -93,8 +93,11 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Disconnect function to disconnect from peripheral
     func disconnect() {
+        announceDisconnect()
         guard let peripheral = connectedPeripheral else { return }
-        centralManager.cancelPeripheralConnection(peripheral)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.centralManager.cancelPeripheralConnection(peripheral)
+            }
     }
     
     // Send Message function, same message as ConversationView message
@@ -177,6 +180,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         connectedPeripheral = nil
         writeCharacteristic = nil    // clear this on disconnect
         hasAnnouncedPresence = false
+        nodeRoutingTable.removeAll()
         print("Disconnected from \(peripheral.name ?? "unknown")")
     }
     
@@ -189,23 +193,6 @@ extension BluetoothManager: CBCentralManagerDelegate {
         myUserName = name
     }
     
-//    func requestRoutingTable() {
-//        print("In requestRoutingTable")
-//        guard let peripheral = connectedPeripheral,
-//              let characteristic = writeCharacteristic,
-//              let data = "REQUEST:\(myNodeID ?? "?")".data(using: .utf8) else {
-//            print("Not ready to request routing table")
-//            return
-//        }
-//        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-//        peripheral.writeValue(data, for: characteristic, type: writeType)
-//        if let readable = String(data: data, encoding: .utf8) {
-//            print("data for REQUEST (decoded):", readable)
-//        } else {
-//            print("data for REQUEST: failed to decode as UTF-8")
-//        }
-//        print("Requested routing table")
-//    }
     func requestRoutingTable(){
         print("In requestRT")
         guard let nodeID = myNodeID,
@@ -216,11 +203,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
             return
         }
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-        peripheral.writeValue(data, for: characteristic, type: writeType)
-        if let readable = String(data: data, encoding: .utf8) {
-            print("data for REQUEST (decoded):", readable)
-        } else {
-            print("data for REQUEST: failed to decode as UTF-8")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            peripheral.writeValue(data, for: characteristic, type: writeType)
         }
         print("requested RT")
     }
@@ -341,6 +325,12 @@ extension BluetoothManager: CBPeripheralDelegate {
             sendRoutingTable()
             return
         }
+        
+        if appText.hasPrefix("DISCONNECT:") {
+            let nodeID = String(appText.dropFirst("DISCONNECT:".count))
+            handleDisconnect(nodeID: nodeID)
+            return
+        }
 
         let incoming = Message(text: appText, sender: "Node", timestamp: Date())
         messages.append(incoming)
@@ -390,6 +380,27 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         hasAnnouncedPresence = true
         announcePresence(userName: name)
+    }
+    
+    func handleDisconnect(nodeID: String) {
+        print("In handleDisconnect")
+        nodeRoutingTable.removeValue(forKey: nodeID)
+        print("Node \(nodeID) disconnected, removed from routing table")
+    }
+    
+    func announceDisconnect() {
+        print("In anounceDisconnect")
+        guard let nodeID = myNodeID,
+              let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic,
+              let data = "DISCONNECT:\(nodeID)".data(using: .utf8) else {
+            print("Not ready to announce disconnect")
+            return
+        }
+        
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        print("Announced disconnect for node \(nodeID)")
     }
 }
 
