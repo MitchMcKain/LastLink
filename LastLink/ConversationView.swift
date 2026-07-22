@@ -77,7 +77,7 @@ struct ConversationView: View {
                     .textFieldStyle(.roundedBorder)
                 
                 Button("Send") {
-                    bluetooth.sendMessage(messageInput, sender: userName)
+                    bluetooth.sendMessage(messageInput, sender: userName, destination: contact.nodeID)
                     messageInput = ""
                 }
                 .disabled(messageInput.isEmpty || !bluetooth.isConnected)

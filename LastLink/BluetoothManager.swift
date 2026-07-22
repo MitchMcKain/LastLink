@@ -98,10 +98,12 @@ class BluetoothManager: NSObject, ObservableObject {
     }
     
     // Send Message function, same message as ConversationView message
-    func sendMessage(_ message: String, sender: String) {
+    func sendMessage(_ message: String, sender: String, destination: String) {
+        let outgoingMessage = "@\(destination) \(message)"
+        
         guard let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
-              let data = message.data(using: .utf8) else {
+              let data = outgoingMessage.data(using: .utf8) else {
             print("Not ready to send")
             return
         }
@@ -110,7 +112,7 @@ class BluetoothManager: NSObject, ObservableObject {
 
         let outgoing = Message(text: message, sender: sender, timestamp: Date())
         messages.append(outgoing)
-        print("Sent: \(message)")
+        print("Sent to \(destination): \(message)")
     }
 }
 
