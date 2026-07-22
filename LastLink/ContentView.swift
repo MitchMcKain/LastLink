@@ -60,6 +60,15 @@ struct ContentView: View {
                 WelcomeView(userName: $userName, isPresented: $showWelcome)
                     .interactiveDismissDisabled(true)
             }
+            
+            // Inactivity warning pop-up
+            .alert("Still there?", isPresented: $bluetooth.showInactivityWarning) {
+                Button("I'm still here") {
+                    bluetooth.stayConnected()
+                }
+            } message: {
+                Text("You'll be disconnected in 15 seconds due to inactivity.")
+            }
         }
     }
 }

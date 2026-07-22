@@ -16,6 +16,13 @@ class BluetoothManager: NSObject, ObservableObject {
     private var writeCharacteristic: CBCharacteristic?
     private var hasAnnouncedPresence = false
     
+    // Variables for monitoring user activity
+    @Published var showInactivityWarning = false
+    private var lastActivityDate = Date()
+    private var inactivityTimer: Timer?
+    private let inactivityThreshold: TimeInterval = 30
+    private let responseGracePeriod: TimeInterval = 15
+    
     let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
     let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral
     let targetNotifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // TX from ESP32's perspective
@@ -64,6 +71,46 @@ class BluetoothManager: NSObject, ObservableObject {
         centralManager = CBCentralManager(delegate: self, queue: nil)
     }
     
+    private func recordActivity() {
+        lastActivityDate = Date()
+        if showInactivityWarning {
+            showInactivityWarning = false
+        }
+    }
+    
+    func stayConnected() {
+        recordActivity()
+    }
+    
+    private func startInactivityMonitor() {
+        inactivityTimer?.invalidate()
+        lastActivityDate = Date()
+        inactivityTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.checkInactivity()
+        }
+    }
+    
+    private func stopInactivityMonitor() {
+        inactivityTimer?.invalidate()
+        inactivityTimer = nil
+        showInactivityWarning = false
+    }
+    
+    private func checkInactivity() {
+        guard isConnected else { return }
+        let elapsed = Date().timeIntervalSince(lastActivityDate)
+        if elapsed >= inactivityThreshold + responseGracePeriod {
+            print("No response to inactivity warning, disconnecting")
+            DispatchQueue.main.async {
+                self.disconnect()
+            }
+        } else if elapsed >= inactivityThreshold {
+            DispatchQueue.main.async {
+                self.showInactivityWarning = true
+            }
+        }
+    }
+    
     // Scanning function for finding nearby devices
     func startScanning() {
         discoveredDevices = []
@@ -102,6 +149,7 @@ class BluetoothManager: NSObject, ObservableObject {
     
     // Send Message function, same message as ConversationView message
     func sendMessage(_ message: String, sender: String, destination: String) {
+        recordActivity()
         let outgoingMessage = "@\(destination) \(message)"
         
         guard let peripheral = connectedPeripheral,
@@ -164,6 +212,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         myNodeID = extractNodeID(from: peripheral.name)
         peripheral.delegate = self
         peripheral.discoverServices(nil)
+        startInactivityMonitor()
         print("discoverServices called, myNodeID = \(myNodeID ?? "nil")")
     }
     
@@ -176,12 +225,15 @@ extension BluetoothManager: CBCentralManagerDelegate {
     
     // Handle disconencting from a peripheral
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        isConnected = false
-        connectedPeripheral = nil
-        writeCharacteristic = nil    // clear this on disconnect
-        hasAnnouncedPresence = false
-        nodeRoutingTable.removeAll()
-        print("Disconnected from \(peripheral.name ?? "unknown")")
+        DispatchQueue.main.async {
+            self.isConnected = false
+            self.connectedPeripheral = nil
+            self.writeCharacteristic = nil
+            self.hasAnnouncedPresence = false
+            self.nodeRoutingTable.removeAll()
+            self.stopInactivityMonitor()
+            print("Disconnected from \(peripheral.name ?? "unknown")")
+        }
     }
     
     private func extractNodeID(from peripheralName: String?) -> String? {
@@ -332,6 +384,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             return
         }
 
+        recordActivity() // may not fire?
         let incoming = Message(text: appText, sender: "Node", timestamp: Date())
         messages.append(incoming)
         print("Received: \(appText)")
