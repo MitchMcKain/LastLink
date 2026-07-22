@@ -187,19 +187,44 @@ extension BluetoothManager: CBCentralManagerDelegate {
         myUserName = name
     }
     
-    func requestRoutingTable() {
-        guard let peripheral = connectedPeripheral,
+//    func requestRoutingTable() {
+//        print("In requestRoutingTable")
+//        guard let peripheral = connectedPeripheral,
+//              let characteristic = writeCharacteristic,
+//              let data = "REQUEST:\(myNodeID ?? "?")".data(using: .utf8) else {
+//            print("Not ready to request routing table")
+//            return
+//        }
+//        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+//        peripheral.writeValue(data, for: characteristic, type: writeType)
+//        if let readable = String(data: data, encoding: .utf8) {
+//            print("data for REQUEST (decoded):", readable)
+//        } else {
+//            print("data for REQUEST: failed to decode as UTF-8")
+//        }
+//        print("Requested routing table")
+//    }
+    func requestRoutingTable(){
+        print("In requestRT")
+        guard let nodeID = myNodeID,
+              let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
-              let data = "REQUEST:\(myNodeID ?? "?")".data(using: .utf8) else {
-            print("Not ready to request routing table")
+              let data = "REQUEST:\(nodeID)".data(using: .utf8) else {
+            print("Not ready to request")
             return
         }
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
         peripheral.writeValue(data, for: characteristic, type: writeType)
-        print("Requested routing table")
+        if let readable = String(data: data, encoding: .utf8) {
+            print("data for REQUEST (decoded):", readable)
+        } else {
+            print("data for REQUEST: failed to decode as UTF-8")
+        }
+        print("requested RT")
     }
     
     func sendRoutingTable() {
+        print("In sendRoutingTable")
         guard let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic else {
             print("Not ready to send routing table")
@@ -208,7 +233,9 @@ extension BluetoothManager: CBCentralManagerDelegate {
         let encoded = nodeRoutingTable.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
         guard let data = "TABLE:\(encoded)".data(using: .utf8) else { return }
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-        peripheral.writeValue(data, for: characteristic, type: writeType)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            peripheral.writeValue(data, for: characteristic, type: writeType)
+        }
         print("Sent routing table: \(encoded)")
     }
 }
@@ -252,7 +279,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
     }
     
-    // Read in message that was sent and is availabl on ESP32
+    // Read in message that was sent and is available on ESP32
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard error == nil, let data = characteristic.value,
               let text = String(data: data, encoding: .utf8) else {
@@ -273,6 +300,11 @@ extension BluetoothManager: CBPeripheralDelegate {
         let parseResult = parseIncoming(text)
         let appText = parseResult.text
         
+        if appText.hasPrefix("[") {
+            print("Ignored firmware message: \(appText)")
+            return
+        }
+        
         // If message is a presence announcement...
         if appText.hasPrefix("PRESENCE:") {
             let parts = appText.dropFirst("PRESENCE:".count).split(separator: ":", maxSplits: 1)
@@ -288,6 +320,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         
         // If message is a routing table...
         if appText.hasPrefix("TABLE:") {
+            print("recieved a routing table")
             let encoded = appText.dropFirst("TABLE:".count)
             let pairs = encoded.split(separator: ",")
             for pair in pairs {
@@ -299,7 +332,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
             return
         }
-        
+                
         // If message is a request for the routing table...
         if appText.hasPrefix("REQUEST:") {
             print("Received routing table request")
@@ -332,8 +365,13 @@ extension BluetoothManager: CBPeripheralDelegate {
         peripheral.writeValue(data, for: characteristic, type: writeType)
         print("Announced presence: \(userName) at \(nodeID)")
         
-        requestRoutingTable()
         handlePresence(nodeID: nodeID, name: userName)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.requestRoutingTable()
+        }
+
+        
     }
     
     private func announceIfReady() {
