@@ -16,5 +16,7 @@ struct Message: Identifiable{ // Text message information
     let text: String
     let sender: String
     let timestamp: Date
-    var status: MessageStatus = .sent   
+    var status: MessageStatus = .sent
+    var firmwareID: Int?
+    var conversationID: String
 }

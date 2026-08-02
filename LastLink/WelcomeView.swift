@@ -111,6 +111,8 @@ struct WelcomeView: View {
                 
                 Button("Sign in as Emergency Service") {
                     showEMSField = true
+                    userName = "Pittsburgh EMS"
+                    UserDefaults.standard.set(nameInput, forKey: "userName")
                 }
                 .buttonStyle(.bordered)
                 .tint(.red)

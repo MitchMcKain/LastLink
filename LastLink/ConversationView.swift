@@ -36,7 +36,7 @@ struct ConversationView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) { // Allows messages to be added smoothly
-                        ForEach(bluetooth.messages) { message in
+                        ForEach(bluetooth.messages.filter { $0.conversationID == contact.nodeID}) { message in
                             HStack {
                                 if message.sender == userName {
                                     Spacer()

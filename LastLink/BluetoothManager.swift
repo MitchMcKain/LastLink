@@ -208,7 +208,7 @@ class BluetoothManager: NSObject, ObservableObject {
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
         peripheral.writeValue(data, for: characteristic, type: writeType)
 
-        let outgoing = Message(text: message, sender: sender, timestamp: Date())
+        let outgoing = Message(text: message, sender: sender, timestamp: Date(), conversationID: destination)
         pendingMessageID = outgoing.id
         messages.append(outgoing)
         print("Sent to \(destination): \(message)")
@@ -244,7 +244,7 @@ class BluetoothManager: NSObject, ObservableObject {
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
         peripheral.writeValue(data, for: characteristic, type: writeType)
 
-        let outgoing = Message(text: message, sender: sender, timestamp: Date())
+        let outgoing = Message(text: message, sender: sender, timestamp: Date(), conversationID: "BROADCAST")
         messages.append(outgoing)
         print("Emergency broadcast sent: \(message)")
     }
@@ -409,17 +409,19 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
         
         print("Raw: \(text)")
+        
+        let parseResult = parseIncoming(text)
+        let appText = parseResult.text
+        
+        print("")
 
         // If message is an Emergency message
-        if text.hasPrefix("EMERGENCY:") {
-            let alertText = text.replacingOccurrences(of: "EMERGENCY:", with: "").trimmingCharacters(in: .whitespaces)
+        if appText.hasPrefix("EMERGENCY:") {
+            let alertText = appText.replacingOccurrences(of: "EMERGENCY:", with: "").trimmingCharacters(in: .whitespaces)
             emergencyMessage = alertText
             print("Emergency received: \(alertText)")
             return   // don't also treat this as a normal chat message
         }
-        
-        let parseResult = parseIncoming(text)
-        let appText = parseResult.text
         
         if appText.hasPrefix("[ACK]") {
             handleAck()
@@ -492,7 +494,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
 
         recordActivity() // may not fire?
-        let incoming = Message(text: appText, sender: "Node", timestamp: Date())
+        let incoming = Message(text: appText, sender: "Node", timestamp: Date(), conversationID: parseResult.nodeID ?? "Unknown")
         messages.append(incoming)
         print("Received: \(appText)")
     }
