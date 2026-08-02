@@ -57,13 +57,13 @@ struct ContentView: View {
             
             // Welcome screen as pop-up
             .sheet(isPresented: $showWelcome) {
-                WelcomeView(userName: $userName, isPresented: $showWelcome)
+                WelcomeView(userName: $userName, isPresented: $showWelcome, bluetooth: bluetooth)
                     .interactiveDismissDisabled(true)
             }
             
             // Inactivity warning pop-up
-            .alert("Still there?", isPresented: $bluetooth.showInactivityWarning) {
-                Button("I'm still here") {
+            .alert("Do you still require connection?", isPresented: $bluetooth.showInactivityWarning) {
+                Button("Yes!") {
                     bluetooth.stayConnected()
                 }
             } message: {

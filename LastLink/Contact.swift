@@ -13,3 +13,7 @@ struct Contact: Identifiable, Hashable {
     
     var id: String{ nodeID }
 }
+
+extension Contact {
+    static let emergencyBroadcast = Contact(name: "Emergency Broadcast", nodeID: "BROADCAST")
+}

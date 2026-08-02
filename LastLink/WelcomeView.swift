@@ -11,9 +11,14 @@ struct WelcomeView: View {
     
     @Binding var userName: String
     @Binding var isPresented: Bool       // Controls whether the sheet is showing
+    @ObservedObject var bluetooth: BluetoothManager
     
     @State private var nameInput: String = ""   // Temporary holder while user types
     @State private var showNameField: Bool = false
+    
+    @State private var showEMSField: Bool = false
+    @State private var emsPasswordInput: String = ""
+    @State private var emsError: Bool = false
     
     // Recall the user's name from previous instance
     let savedName: String? = UserDefaults.standard.string(forKey: "userName")
@@ -27,7 +32,42 @@ struct WelcomeView: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
-            if let name = savedName, !showNameField {
+            if showEMSField {
+                Text("Emergency Service Sign-In")
+                    .foregroundColor(.gray)
+                
+                SecureField("Password", text: $emsPasswordInput)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .padding(.horizontal, 40)
+                
+                if emsError {
+                    Text("Incorrect password")
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
+                
+                Button("Sign In") {
+                    if bluetooth.authenticateEMS(password: emsPasswordInput) {
+                        userName = "Pittsburgh EMS"
+                        isPresented = false
+                    } else {
+                        emsError = true
+                        emsPasswordInput = ""
+                    }
+                }
+                .disabled(emsPasswordInput.isEmpty)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                
+                Button("Cancel") {
+                    showEMSField = false
+                    emsPasswordInput = ""
+                    emsError = false
+                }
+                .buttonStyle(.bordered)
+                .tint(.gray)
+            }
+            else if let name = savedName, !showNameField {
                 Text("Welcome back, \(name)!")
                     .foregroundColor(.gray)
                 
@@ -43,6 +83,12 @@ struct WelcomeView: View {
                 }
                     .buttonStyle(.borderedProminent)
                     .tint(.gray)
+                
+                Button("Sign in as Emergency Service") {
+                    showEMSField = true
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
             else{
                 Text("Enter your display name to get started")
@@ -62,6 +108,12 @@ struct WelcomeView: View {
                 .disabled(nameInput.isEmpty) // Button is greyed out until they type something
                 .buttonStyle(.borderedProminent)
                 .tint(.yellow)
+                
+                Button("Sign in as Emergency Service") {
+                    showEMSField = true
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
             }
             
             Spacer()

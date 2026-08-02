@@ -23,7 +23,7 @@ struct MessagesView: View {
                         }
                     }
                     
-                    List(bluetooth.contacts) { contact in
+                    List(bluetooth.visibleContacts) { contact in
                         NavigationLink(destination: ConversationView(
                             contact: contact,
                             userName: userName,

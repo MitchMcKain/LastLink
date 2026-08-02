@@ -47,9 +47,18 @@ struct ConversationView: View {
                                         .background(message.sender == userName ? Color.yellow : Color.gray.opacity(0.3))
                                         .foregroundColor(.primary)
                                         .cornerRadius(12)
-                                    Text(formatTime(message.timestamp))
-                                        .font(.caption2)
-                                        .foregroundColor(.gray)
+
+                                    HStack(spacing: 4) {
+                                        Text(formatTime(message.timestamp))
+                                            .font(.caption2)
+                                            .foregroundColor(.gray)
+
+                                        if message.sender == userName {
+                                            Image(systemName: message.status == .delivered ? "checkmark.circle.fill" : "checkmark.circle")
+                                                .font(.caption2)
+                                                .foregroundColor(message.status == .delivered ? .green : .gray)
+                                        }
+                                    }
                                 }
                                 if message.sender != userName {
                                     Spacer()
@@ -75,9 +84,22 @@ struct ConversationView: View {
             HStack {
                 TextField("Type here...", text: $messageInput)
                     .textFieldStyle(.roundedBorder)
+                    .onChange(of: messageInput) {
+                        if messageInput.count > 200 {
+                            messageInput = String(messageInput.prefix(200))
+                        }
+                    }
+                
+                Text("\(messageInput.count)/200")
+                        .font(.caption2)
+                        .foregroundColor(messageInput.count >= 200 ? .red : .gray)
                 
                 Button("Send") {
-                    bluetooth.sendMessage(messageInput, sender: userName, destination: contact.nodeID)
+                    if contact.nodeID == "BROADCAST" {
+                        bluetooth.sendEmergencyBroadcast(messageInput, sender: userName)
+                    } else {
+                        bluetooth.sendMessage(messageInput, sender: userName, destination: contact.nodeID)
+                    }
                     messageInput = ""
                 }
                 .disabled(messageInput.isEmpty || !bluetooth.isConnected)

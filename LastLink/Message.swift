@@ -7,9 +7,14 @@
 
 import Foundation
 
+enum MessageStatus {
+    case sent, delivered
+}
+
 struct Message: Identifiable{ // Text message information
     let id = UUID()
     let text: String
     let sender: String
     let timestamp: Date
+    var status: MessageStatus = .sent   
 }

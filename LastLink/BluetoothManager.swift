@@ -15,19 +15,21 @@ class BluetoothManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral? // This will be the ESP32
     private var writeCharacteristic: CBCharacteristic?
     private var hasAnnouncedPresence = false
+    private var pendingMessageID: UUID?
+    private var emsPassword = "ece412"
     
     // Variables for monitoring user activity
     @Published var showInactivityWarning = false
     private var lastActivityDate = Date()
     private var inactivityTimer: Timer?
-    private let inactivityThreshold: TimeInterval = 30
+    private let inactivityThreshold: TimeInterval = 60
     private let responseGracePeriod: TimeInterval = 15
     
     let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
     let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral
     let targetNotifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // TX from ESP32's perspective
     
-    // Variables for connection process
+    // Variables that can be accessed by other files
     @Published var myUserName: String? = nil
     @Published var isAuthorized: Bool = false
     @Published var isScanning: Bool = false
@@ -36,8 +38,11 @@ class BluetoothManager: NSObject, ObservableObject {
     @Published var deviceNames: [UUID: String] = [:]
     @Published var messages: [Message] = []
     @Published var myNodeID: String? = nil
-    @Published var emergencyMessage: String? = "Evacuate ASAP"
+    @Published var emergencyMessage: String? = nil
     @Published var nodeRoutingTable: [String: String] = [:]
+    @Published var lastAckedMessageID: UUID?
+    @Published var onlineNodeIDs: Set<String> = []
+    @Published var isEMSAuthenticated: Bool = false
     
     var contacts: [Contact] {
         nodeRoutingTable
@@ -47,15 +52,18 @@ class BluetoothManager: NSObject, ObservableObject {
             }
     }
     
+    var visibleContacts: [Contact] {
+        isEMSAuthenticated ? contacts + [Contact.emergencyBroadcast] : contacts
+    }
+    
+    
     let knownNodeIDs: [String] = ["A", "B", "C"]
     
     var nodeStatusList: [NodeStatusInfo] {
         knownNodeIDs.map { nodeID in
-            if let userName = nodeRoutingTable[nodeID] {
-                return NodeStatusInfo(id: nodeID, userName: userName, isOnline: true)
-            } else {
-                return NodeStatusInfo(id: nodeID, userName: "N/A", isOnline: false)
-            }
+            let userName = nodeRoutingTable[nodeID] ?? "N/A"
+            let isOnline = onlineNodeIDs.contains(nodeID)
+            return NodeStatusInfo(id: nodeID, userName: userName, isOnline: isOnline)
         }
         .sorted { $0.id < $1.id }
     }
@@ -111,6 +119,41 @@ class BluetoothManager: NSObject, ObservableObject {
         }
     }
     
+    private func extractStringID(from text: String) -> String? {
+        for token in text.split(separator: " ") {
+            if token.hasPrefix("id=") {
+                return String(token.dropFirst(3))
+            }
+        }
+        return nil
+    }
+    
+    private func handleNodesTable(_ text: String) {
+        // "[NODES] A:A:0,C:C:1" — first field of each entry is a reachable destination
+        // Extract the active nodes from message
+        guard let payload = text.split(separator: " ", maxSplits: 1).last else { return }
+        let destinations = payload.split(separator: ",").compactMap { entry -> String? in
+            entry.split(separator: ":").first.map(String.init)
+        }
+        print("Destins: \(destinations)")
+        // Toggle online nodes to online
+        for node in destinations {
+            handleNodeOnline(id: node)
+        }
+    }
+    
+    private func handleNodeOnline(id: String) {
+        onlineNodeIDs.insert(id)
+        print("updated online node...")
+        print(onlineNodeIDs)
+    }
+    
+    private func handleNodeOffline(id: String) {
+        onlineNodeIDs.remove(id)
+        print("updated online node...")
+        print(onlineNodeIDs)
+    }
+    
     // Scanning function for finding nearby devices
     func startScanning() {
         discoveredDevices = []
@@ -150,6 +193,10 @@ class BluetoothManager: NSObject, ObservableObject {
     // Send Message function, same message as ConversationView message
     func sendMessage(_ message: String, sender: String, destination: String) {
         recordActivity()
+        guard message.count <= 200 else {
+                print("Message exceeds 200 character limit — not sent")
+                return
+            }
         let outgoingMessage = "@\(destination) \(message)"
         
         guard let peripheral = connectedPeripheral,
@@ -162,8 +209,44 @@ class BluetoothManager: NSObject, ObservableObject {
         peripheral.writeValue(data, for: characteristic, type: writeType)
 
         let outgoing = Message(text: message, sender: sender, timestamp: Date())
+        pendingMessageID = outgoing.id
         messages.append(outgoing)
         print("Sent to \(destination): \(message)")
+    }
+    
+    private func handleAck() {
+        guard let id = pendingMessageID else { return }
+        if let index = messages.firstIndex(where: { $0.id == id }) {
+            messages[index].status = .delivered
+        }
+        pendingMessageID = nil
+    }
+    
+    func authenticateEMS(password: String) -> Bool {
+        if password == emsPassword {
+            isEMSAuthenticated = true
+            return true
+        }
+        return false
+    }
+
+    func sendEmergencyBroadcast(_ message: String, sender: String) {
+        guard message.count <= 200 else {
+            print("Message exceeds 200 character limit — not sent")
+            return
+        }
+        guard let peripheral = connectedPeripheral,
+              let characteristic = writeCharacteristic,
+              let data = "EMERGENCY:\(message)".data(using: .utf8) else {
+            print("Not ready to send")
+            return
+        }
+        let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+
+        let outgoing = Message(text: message, sender: sender, timestamp: Date())
+        messages.append(outgoing)
+        print("Emergency broadcast sent: \(message)")
     }
 }
 
@@ -246,7 +329,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func requestRoutingTable(){
-        print("In requestRT")
+//        print("In requestRT")
         guard let nodeID = myNodeID,
               let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
@@ -262,7 +345,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     }
     
     func sendRoutingTable() {
-        print("In sendRoutingTable")
+//        print("In sendRoutingTable")
         guard let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic else {
             print("Not ready to send routing table")
@@ -337,6 +420,30 @@ extension BluetoothManager: CBPeripheralDelegate {
         
         let parseResult = parseIncoming(text)
         let appText = parseResult.text
+        
+        if appText.hasPrefix("[ACK]") {
+            handleAck()
+            return
+        }
+        
+        if appText.hasPrefix("[NODES]") {
+            handleNodesTable(appText)
+        }
+        
+        if appText.hasPrefix("[NODE+]") {
+            print("adding a node...")
+            guard let nodeID = extractStringID(from: text) else { return }
+            print("still adding a node")
+            handleNodeOnline(id: nodeID)
+        }
+        
+        if appText.hasPrefix("[NODE-]") {
+            print("removing a node...")
+            guard let nodeID = extractStringID(from: text) else { return }
+            print("still removing")
+            handleNodeOffline(id: nodeID)
+        }
+            
         
         if appText.hasPrefix("[") {
             print("Ignored firmware message: \(appText)")
@@ -436,13 +543,13 @@ extension BluetoothManager: CBPeripheralDelegate {
     }
     
     func handleDisconnect(nodeID: String) {
-        print("In handleDisconnect")
+//        print("In handleDisconnect")
         nodeRoutingTable.removeValue(forKey: nodeID)
         print("Node \(nodeID) disconnected, removed from routing table")
     }
     
     func announceDisconnect() {
-        print("In anounceDisconnect")
+//        print("In anounceDisconnect")
         guard let nodeID = myNodeID,
               let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
