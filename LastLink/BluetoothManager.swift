@@ -23,7 +23,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private var lastActivityDate = Date()
     private var inactivityTimer: Timer?
     private let inactivityThreshold: TimeInterval = 60
-    private let responseGracePeriod: TimeInterval = 15
+    private let responseGracePeriod: TimeInterval = 10
     
     let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
     let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral

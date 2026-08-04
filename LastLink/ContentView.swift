@@ -21,55 +21,78 @@ struct ContentView: View {
 
     
     var body: some View {
-        NavigationStack{
-            TabView(selection: $selection) {
-                
-                // Messages tab navigation
-                MessagesView(userName: userName, bluetooth: bluetooth)
-                    .tabItem { Label("Messages", systemImage: "message") }
-                    .tag(AppTab.messages)   // .tag() is how TabView knows which tab is which
-                
-                // Connect tab navigation
-                ConnectView(bluetooth: bluetooth)
-                    .tabItem { Label("Connect", systemImage: "wifi") }
-                    .tag(AppTab.connect)   // .tag() is how TabView knows which tab is which
-                
-                // Status tab navigation
-                StatusView(bluetooth: bluetooth)
-                    .tabItem { Label("Status", systemImage: "antenna.radiowaves.left.and.right") }
-                    .tag(AppTab.status)
-                
-            }
-            .onAppear {
-                // If a name was previously saved, load it automatically
-                if let savedName = UserDefaults.standard.string(forKey: "userName") {
-                    userName = savedName
+        ZStack {
+            NavigationStack {
+                TabView(selection: $selection) {
+                    MessagesView(userName: userName, bluetooth: bluetooth)
+                        .tabItem { Label("Messages", systemImage: "message") }
+                        .tag(AppTab.messages)
+
+                    ConnectView(bluetooth: bluetooth)
+                        .tabItem { Label("Connect", systemImage: "wifi") }
+                        .tag(AppTab.connect)
+
+                    StatusView(bluetooth: bluetooth)
+                        .tabItem { Label("Status", systemImage: "antenna.radiowaves.left.and.right") }
+                        .tag(AppTab.status)
                 }
-            }
-            .onChange(of: userName)  { oldValue, newValue in
+                .onAppear {
+                    if let savedName = UserDefaults.standard.string(forKey: "userName") {
+                        userName = savedName
+                    }
+                }
+                .onChange(of: userName) { oldValue, newValue in
                     bluetooth.setUserName(newValue)
                 }
-            
-            .navigationTitle("Last Link")
-            .navigationBarTitleDisplayMode(.inline)  // Center title on one line
-            .toolbarBackground(Color.yellow, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            
-            // Welcome screen as pop-up
-            .sheet(isPresented: $showWelcome) {
-                WelcomeView(userName: $userName, isPresented: $showWelcome, bluetooth: bluetooth)
-                    .interactiveDismissDisabled(true)
+                .navigationTitle("Last Link")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Color.yellow, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .sheet(isPresented: $showWelcome) {
+                    WelcomeView(userName: $userName, isPresented: $showWelcome, bluetooth: bluetooth)
+                        .interactiveDismissDisabled(true)
+                }
             }
-            
-            // Inactivity warning pop-up
-            .alert("Do you still require connection?", isPresented: $bluetooth.showInactivityWarning) {
-                Button("Yes!") {
+
+            if bluetooth.showInactivityWarning {
+                InactivityWarningOverlay {
                     bluetooth.stayConnected()
                 }
-            } message: {
-                Text("You'll be disconnected in 15 seconds due to inactivity.")
             }
         }
+    }
+}
+
+struct InactivityWarningOverlay: View {
+    let onConfirm: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                Text("Do you still require connection?")
+                    .font(.headline)
+                Text("You'll be disconnected in 10 seconds otherwise.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.gray)
+
+                Button("Yes!") {
+                    onConfirm()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+            }
+            .padding(24)
+            .background(Color(.systemBackground))
+            .cornerRadius(16)
+            .shadow(radius: 10)
+            .padding(40)
+        }
+        .transition(.opacity)
+        .zIndex(1)
     }
 }
 
