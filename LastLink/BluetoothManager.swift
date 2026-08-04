@@ -17,6 +17,9 @@ class BluetoothManager: NSObject, ObservableObject {
     private var hasAnnouncedPresence = false
     private var pendingMessageID: UUID?
     private var emsPassword = "ece412"
+    private var pendingTableRequest = false
+    private var tableRequestRetries = 0
+    private let maxTableRequestRetries = 3
     
     // Variables for monitoring user activity
     @Published var showInactivityWarning = false
@@ -24,8 +27,7 @@ class BluetoothManager: NSObject, ObservableObject {
     private var inactivityTimer: Timer?
     private let inactivityThreshold: TimeInterval = 60
     private let responseGracePeriod: TimeInterval = 10
-    
-    let targetServiceUUID = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed service UUID for iPad peripheral
+
     let targetCharacteristicUUID = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E") // Fixed characteristic UUID for iPad peripheral
     let targetNotifyUUID = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E") // TX from ESP32's perspective
     
@@ -328,8 +330,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         myUserName = name
     }
     
-    func requestRoutingTable(){
-//        print("In requestRT")
+    func requestRoutingTable() {
         guard let nodeID = myNodeID,
               let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic,
@@ -338,14 +339,32 @@ extension BluetoothManager: CBCentralManagerDelegate {
             return
         }
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
             peripheral.writeValue(data, for: characteristic, type: writeType)
+            self.pendingTableRequest = true
+            print("requested RT (attempt \(self.tableRequestRetries + 1))")
+            self.scheduleTableRequestTimeout()
         }
-        print("requested RT")
+    }
+    
+    private func scheduleTableRequestTimeout() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, self.pendingTableRequest else { return }  // TABLE already arrived, nothing to do
+
+            guard self.tableRequestRetries < self.maxTableRequestRetries else {
+                print("Routing table request failed after \(self.maxTableRequestRetries) attempts")
+                self.pendingTableRequest = false
+                self.tableRequestRetries = 0
+                return
+            }
+
+            self.tableRequestRetries += 1
+            self.requestRoutingTable()
+        }
     }
     
     func sendRoutingTable() {
-//        print("In sendRoutingTable")
         guard let peripheral = connectedPeripheral,
               let characteristic = writeCharacteristic else {
             print("Not ready to send routing table")
@@ -354,7 +373,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
         let encoded = nodeRoutingTable.map { "\($0.key)=\($0.value)" }.joined(separator: ",")
         guard let data = "TABLE:\(encoded)".data(using: .utf8) else { return }
         let writeType: CBCharacteristicWriteType = characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             peripheral.writeValue(data, for: characteristic, type: writeType)
         }
         print("Sent routing table: \(encoded)")
@@ -477,6 +496,8 @@ extension BluetoothManager: CBPeripheralDelegate {
                 let name = String(kv[1])
                 handlePresence(nodeID: nodeID, name: name)
             }
+            pendingTableRequest = false
+            tableRequestRetries = 0
             return
         }
                 
@@ -520,12 +541,6 @@ extension BluetoothManager: CBPeripheralDelegate {
         print("Announced presence: \(userName) at \(nodeID)")
         
         handlePresence(nodeID: nodeID, name: userName)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            self.requestRoutingTable()
-        }
-
-        
     }
     
     private func announceIfReady() {
@@ -541,7 +556,16 @@ extension BluetoothManager: CBPeripheralDelegate {
             return   // already handled this connection, ignore repeat discovery callbacks
         }
         hasAnnouncedPresence = true
-        announcePresence(userName: name)
+        
+        for _ in 1...3 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                self.announcePresence(userName: name)
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            self.requestRoutingTable()
+        }
     }
     
     func handleDisconnect(nodeID: String) {
